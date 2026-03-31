@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walmart Sales Analysis</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f172a', /* slate-900 */
+                        cardBg: '#1e293b', /* slate-800 */
+                        cardBorder: '#334155', /* slate-700 */
+                        textMuted: '#94a3b8', /* slate-400 */
+                        accentBlue: '#3b82f6', /* blue-500 */
+                        accentPurple: '#8b5cf6', /* purple-500 */
+                        accentGreen: '#10b981', /* emerald-500 */
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .dashboard-card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
+        .glow-border-purple {
+            border: 1px solid #8b5cf6;
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen p-6">
+
+    <!-- Header Section -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-indigo-400 mb-1">Walmart Sales Analysis</h1>
+            <p class="text-textMuted text-sm">Real-time data insights into store & departmental performance</p>
+        </div>
+        <div>
+            <div class="flex items-center gap-2 bg-cardBg border border-cardBorder px-4 py-2 rounded-lg text-sm font-medium">
+                <div class="w-2.5 h-2.5 bg-accentGreen rounded-full shadow-[0_0_8px_#10b981]"></div>
+                Connected to PostgreSQL
+            </div>
+        </div>
+    </div>
+
+    <!-- Top KPI Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <!-- Top Dept -->
+        <div class="dashboard-card">
+            <h3 class="text-textMuted text-sm mb-2">Top Performing Department</h3>
+            <h2 class="text-2xl font-bold text-white mb-2" id="kpi-top-dept-name">Loading...</h2>
+            <p class="text-accentBlue font-medium text-sm" id="kpi-top-dept-val">$0.00</p>
+        </div>
+
+        <!-- Predicted Sales -->
+        <div class="dashboard-card glow-border-purple">
+            <h3 class="text-textMuted text-sm mb-2">Predicted Next Week (Store 1, Dept 101)</h3>
+            <h2 class="text-2xl font-bold text-white mb-2" id="kpi-predicted-val">Loading...</h2>
+            <p class="text-accentPurple font-medium text-sm flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                Trending
+            </p>
+        </div>
+
+        <!-- Holiday Impact -->
+        <div class="dashboard-card">
+            <h3 class="text-textMuted text-sm mb-2">Holiday Sales Impact</h3>
+            <h2 class="text-2xl font-bold text-accentGreen mb-2" id="kpi-holiday-val">Loading...</h2>
+            <p class="text-accentGreen font-medium text-sm">Avg difference vs regular weeks</p>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        
+        <!-- Monthly Sales Trend Chart -->
+        <div class="dashboard-card">
+            <h3 class="text-lg font-bold text-white mb-6">Monthly Sales Trend (All Stores)</h3>
+            <div class="relative h-[300px] w-full">
+                <canvas id="monthlySalesChart" class="cursor-pointer hover:opacity-80 transition-opacity" title="Click to view underlying data"></canvas>
+            </div>
+        </div>
+
+        <!-- Top 5 Departments Bar Chart -->
+        <div class="dashboard-card">
+            <h3 class="text-lg font-bold text-white mb-6">Top 5 Departments Overview</h3>
+            <div class="relative h-[300px] w-full">
+                <canvas id="topDeptChart" class="cursor-pointer hover:opacity-80 transition-opacity" title="Click to view underlying data"></canvas>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Data Insertion Form -->
+    <div class="dashboard-card mb-6">
+        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-accentBlue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Insert New Sale Record
+        </h3>
+        <form id="addSaleForm" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+            <div>
+                <label class="block text-textMuted text-xs mb-1 uppercase tracking-wider">Store ID</label>
+                <input type="number" id="sf-store" class="w-full bg-darkBg border border-cardBorder rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-accentBlue" required value="1">
+            </div>
+            <div>
+                <label class="block text-textMuted text-xs mb-1 uppercase tracking-wider">Dept ID</label>
+                <input type="number" id="sf-dept" class="w-full bg-darkBg border border-cardBorder rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-accentBlue" required value="101">
+            </div>
+            <div>
+                <label class="block text-textMuted text-xs mb-1 uppercase tracking-wider">Date</label>
+                <input type="date" id="sf-date" class="w-full bg-darkBg border border-cardBorder rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-accentBlue" required>
+            </div>
+            <div>
+                <label class="block text-textMuted text-xs mb-1 uppercase tracking-wider">Weekly Sales ($)</label>
+                <input type="number" step="0.01" id="sf-sales" class="w-full bg-darkBg border border-cardBorder rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-accentBlue" required>
+            </div>
+            <div class="flex items-center h-[38px] px-2">
+                <input type="checkbox" id="sf-holiday" class="mr-2 cursor-pointer w-4 h-4 accent-accentBlue">
+                <label for="sf-holiday" class="text-white text-sm cursor-pointer">Holiday Week?</label>
+            </div>
+            <div>
+                <button type="submit" class="w-full bg-accentBlue hover:bg-blue-600 text-white font-medium py-2 px-4 rounded transition-colors h-[38px] text-sm flex justify-center items-center gap-2">
+                    Submit Data
+                </button>
+            </div>
+        </form>
+        <div id="formMessage" class="mt-3 text-sm hidden"></div>
+    </div>
+
+    <!-- Bottom Section -->
+    <div class="dashboard-card mb-6">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="text-lg font-bold text-white">Holiday vs Non-Holiday Performance Breakdown</h3>
+            <button onclick="window.location.reload()" class="bg-cardBorder hover:bg-slate-600 text-white px-4 py-2 rounded text-sm transition-colors">Refresh</button>
+        </div>
+        <div class="relative h-[250px] w-full flex items-center justify-center">
+            <canvas id="holidayChart" class="cursor-pointer hover:opacity-80 transition-opacity" title="Click to view underlying data"></canvas>
+        </div>
+    </div>
+
+    <!-- Data Modal for Charts -->
+    <div id="dataModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 p-4 transition-opacity">
+        <div class="bg-cardBg border border-cardBorder rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col glow-border-purple relative overflow-hidden">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center px-6 py-4 border-b border-cardBorder bg-darkBg">
+                <h3 id="modalTitle" class="text-xl font-bold text-white flex gap-3 items-center">
+                    <svg class="w-5 h-5 text-accentPurple" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    Data Viewer
+                </h3>
+                <button onclick="closeModal()" class="text-textMuted hover:text-white transition-colors bg-cardBorder rounded-full p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <!-- Modal Body (Table) -->
+            <div class="p-0 overflow-auto flex-1 h-full">
+                <table class="w-full text-left border-collapse">
+                    <thead class="text-[11px] uppercase bg-[#18212f] text-textMuted sticky top-0 z-10 shadow-sm">
+                        <tr id="modalTableHeader">
+                            <!-- JS injected headers -->
+                        </tr>
+                    </thead>
+                    <tbody id="modalTableBody" class="text-sm text-gray-300 divide-y divide-cardBorder">
+                        <!-- JS injected rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Modal functions
+        function openModal(title, headers, rows) {
+            document.getElementById('modalTitle').innerText = title;
+            
+            const thead = document.getElementById('modalTableHeader');
+            thead.innerHTML = '';
+            headers.forEach(h => {
+                const th = document.createElement('th');
+                th.className = 'px-6 py-3 font-semibold tracking-wider whitespace-nowrap';
+                th.innerText = h;
+                thead.appendChild(th);
+            });
+            
+            const tbody = document.getElementById('modalTableBody');
+            tbody.innerHTML = '';
+            if(rows.length === 0) {
+                 tbody.innerHTML = `<tr><td colspan="${headers.length}" class="px-6 py-8 text-center text-textMuted">No data available</td></tr>`;
+            } else {
+                rows.forEach((r, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.className = idx % 2 === 0 ? 'bg-cardBg hover:bg-[#253247] transition-colors' : 'bg-[#1b2638] hover:bg-[#253247] transition-colors';
+                    r.forEach((cellData, cIdx) => {
+                        const td = document.createElement('td');
+                        td.className = 'px-6 py-3 whitespace-nowrap';
+                        if (cIdx === 0 && r.length > 2) td.classList.add('font-medium', 'text-white'); // Highlight first col slightly
+                        td.innerText = cellData !== null ? cellData : '-';
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+            }
+            
+            const modal = document.getElementById('dataModal');
+            modal.classList.remove('hidden');
+            // Prevent scrolling on body
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('dataModal');
+            modal.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        // Click outside modal to close
+        document.getElementById('dataModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        // Formatter config
+        const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+        
+        // Chart Config Defaults for Dark Theme
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = '#334155';
+
+        // 1. Top Departments
+        fetch('/api/views/top_departments')
+            .then(res => res.json())
+            .then(data => {
+                if(data.length > 0) {
+                    document.getElementById('kpi-top-dept-name').innerText = data[0].dept_name;
+                    document.getElementById('kpi-top-dept-val').innerText = formatCurrency(data[0].total_sales);
+                }
+
+                const topDeptCanvas = document.getElementById('topDeptChart');
+                topDeptCanvas.onclick = () => {
+                    const headers = ["Dept ID", "Department Name", "Total Sales"];
+                    const rows = data.map(d => [d.dept_id, d.dept_name, formatCurrency(d.total_sales)]);
+                    openModal("Detailed Data: Top 5 Departments", headers, rows);
+                };
+                new Chart(topDeptCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: data.map(d => d.dept_name),
+                        datasets: [{
+                            data: data.map(d => d.total_sales),
+                            backgroundColor: '#4E8FD1', // The muted blue from screenshot
+                            barThickness: 60
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: '#334155' } },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            });
+
+        // 2. Predict Sales
+        fetch('/api/procedures/predict_sales')
+            .then(res => res.json())
+            .then(data => {
+                if(data.length > 0 && data[0].predicted_next_week_sales) {
+                    document.getElementById('kpi-predicted-val').innerText = formatCurrency(data[0].predicted_next_week_sales);
+                } else {
+                    document.getElementById('kpi-predicted-val').innerText = "Insufficient Data";
+                }
+            }).catch(() => {
+                document.getElementById('kpi-predicted-val').innerText = "Error Loading";
+            });
+
+        // 3. Holiday Impact
+        fetch('/api/views/holiday_impact')
+            .then(res => res.json())
+            .then(data => {
+                const holidayData = data.find(d => d.holiday_flag === true);
+                const nonHolidayData = data.find(d => d.holiday_flag === false);
+                
+                if (holidayData && nonHolidayData) {
+                    const diff = ((holidayData.average_weekly_sales - nonHolidayData.average_weekly_sales) / nonHolidayData.average_weekly_sales) * 100;
+                    const diffEl = document.getElementById('kpi-holiday-val');
+                    diffEl.innerText = (diff > 0 ? '+' : '') + diff.toFixed(1) + '%';
+                    if(diff < 0) {
+                        diffEl.classList.replace('text-accentGreen', 'text-red-500');
+                    }
+                    
+                    // Render Doughnut Chart for Breakdown
+                    const holidayCanvas = document.getElementById('holidayChart');
+                    holidayCanvas.onclick = () => {
+                         const headers = ["Is Holiday Week?", "Total Weeks", "Total Sales", "Average Weekly Sales"];
+                         const rows = [
+                             ["Yes (Holiday)", holidayData.total_weeks, formatCurrency(holidayData.total_sales), formatCurrency(holidayData.average_weekly_sales)],
+                             ["No (Regular)", nonHolidayData.total_weeks, formatCurrency(nonHolidayData.total_sales), formatCurrency(nonHolidayData.average_weekly_sales)]
+                         ];
+                         openModal("Detailed Data: Holiday vs Non-Holiday Performance", headers, rows);
+                    };
+                    new Chart(holidayCanvas, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Holiday Week Avg', 'Non-Holiday Week Avg'],
+                            datasets: [{
+                                data: [holidayData.average_weekly_sales, nonHolidayData.average_weekly_sales],
+                                backgroundColor: ['#10b981', '#334155'], // emerald green and slate
+                                borderColor: '#1e293b',
+                                borderWidth: 2,
+                                hoverOffset: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'bottom', labels: { color: '#f8fafc' } }
+                            },
+                            cutout: '65%'
+                        }
+                    });
+                } else {
+                    document.getElementById('kpi-holiday-val').innerText = "N/A";
+                }
+            });
+
+        // 4. Monthly Sales Trend
+        fetch('/api/views/monthly_sales')
+            .then(res => res.json())
+            .then(data => {
+                // Reverse to show chronological order if backend returns DESC
+                const chronologicalData = data.reverse(); 
+
+                const labels = chronologicalData.map(d => `${d.sales_month}/${d.sales_year} (Store ${d.store_id})`);
+                const values = chronologicalData.map(d => d.total_monthly_sales);
+
+                const monthlyCanvas = document.getElementById('monthlySalesChart');
+                monthlyCanvas.onclick = () => {
+                    const headers = ["Year", "Month", "Store ID", "Store Type", "Location", "Total Monthly Sales"];
+                    const rows = chronologicalData.map(d => [
+                        d.sales_year, 
+                        d.sales_month,
+                        d.store_id,
+                        d.store_type,
+                        d.location,
+                        formatCurrency(d.total_monthly_sales)
+                    ]);
+                    openModal("Detailed Data: Monthly Sales Trend (All Stores)", headers, rows);
+                };
+
+                new Chart(monthlyCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            borderColor: '#a78bfa', // purple-400
+                            backgroundColor: '#a78bfa',
+                            borderWidth: 2,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#a78bfa',
+                            pointRadius: 3,
+                            fill: false,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { grid: { color: '#334155' } },
+                            x: { 
+                                grid: { color: '#334155' },
+                                ticks: { maxTicksLimit: 10 }
+                            }
+                        }
+                    }
+                });
+            });
+        // 5. Handle Form Submission
+        document.getElementById('addSaleForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const msgEl = document.getElementById('formMessage');
+            msgEl.classList.remove('hidden', 'text-accentGreen', 'text-red-500');
+            msgEl.innerText = "Submitting...";
+            msgEl.classList.add('text-textMuted', 'block');
+
+            const payload = {
+                store_id: document.getElementById('sf-store').value,
+                dept_id: document.getElementById('sf-dept').value,
+                sale_date: document.getElementById('sf-date').value,
+                weekly_sales: document.getElementById('sf-sales').value,
+                holiday_flag: document.getElementById('sf-holiday').checked
+            };
+
+            fetch('/api/sales', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                msgEl.classList.remove('text-textMuted', 'text-red-500');
+                if(data.success) {
+                    msgEl.classList.add('text-accentGreen');
+                    msgEl.innerText = "Success! Data inserted. Please refresh to update charts.";
+                    this.reset();
+                    document.getElementById('sf-store').value = 1;
+                    document.getElementById('sf-dept').value = 101;
+                } else {
+                    msgEl.classList.add('text-red-500');
+                    msgEl.innerText = "Error: " + data.message;
+                }
+            })
+            .catch(err => {
+                msgEl.classList.remove('text-textMuted');
+                msgEl.classList.add('text-red-500');
+                msgEl.innerText = "Network Error: Could not connect to API.";
+            });
+        });
+    </script>
+</body>
+</html>
